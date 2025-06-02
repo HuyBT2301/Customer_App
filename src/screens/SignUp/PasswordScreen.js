@@ -1,19 +1,97 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity,Image } from 'react-native';
-import Logo from '../../assets/logo.svg';
-import SongTren from '../../assets/song_tren.jpg';
-export default function PasswordScreen({ navigation }) {
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+} from 'react-native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { getAuth, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { API_BASE_URL } from '../../config';
+
+const PasswordScreen = () => {
   const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const navigation = useNavigation();
+  const route = useRoute();
+  const { phoneNumber } = route.params;
+  const auth = getAuth();
+
+  const handleRegister = async () => {
+    try {
+      if (!password || !confirmPassword) {
+        Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ mật khẩu');
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        Alert.alert('Lỗi', 'Mật khẩu không khớp');
+        return;
+      }
+
+      if (password.length < 6) {
+        Alert.alert('Lỗi', 'Mật khẩu phải có ít nhất 6 ký tự');
+        return;
+      }
+
+      setLoading(true);
+
+      // Tạo email tạm thời từ số điện thoại
+      const email = `${phoneNumber.replace('+', '')}@temporary.com`;
+
+      // Tạo tài khoản với Firebase
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      
+      // Cập nhật thông tin người dùng
+      await updateProfile(userCredential.user, {
+        displayName: phoneNumber
+      });
+
+      // Gọi API backend để tạo tài khoản
+      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${await userCredential.user.getIdToken()}`
+        },
+        body: JSON.stringify({
+          phoneNumber,
+          firebaseUid: userCredential.user.uid
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Không thể tạo tài khoản');
+      }
+
+      Alert.alert('Thành công', 'Đăng ký thành công!', [
+        {
+          text: 'OK',
+          onPress: () => navigation.reset({
+            index: 0,
+            routes: [{ name: 'Login' }],
+          }),
+        },
+      ]);
+    } catch (error) {
+      console.error('Error registering:', error);
+      Alert.alert('Lỗi', 'Không thể tạo tài khoản. Vui lòng thử lại sau.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
-      {/* Sóng trên */}
-      <View style={styles.topWave}>
-        <Image source={SongTren} style={styles.waveImageTop} resizeMode="stretch" />
-      </View>
-      <View style={styles.card}>
-        <Logo width={200} height={200} style={{ alignSelf: 'center' }} />
-        <Text style={styles.title}>Tạo mật khẩu</Text>
+      <Text style={styles.title}>Tạo mật khẩu</Text>
+      <Text style={styles.subtitle}>
+        Vui lòng tạo mật khẩu để bảo vệ tài khoản của bạn
+      </Text>
+
+      <View style={styles.inputContainer}>
         <TextInput
           style={styles.input}
           placeholder="Nhập mật khẩu"
@@ -23,53 +101,69 @@ export default function PasswordScreen({ navigation }) {
         />
         <TextInput
           style={styles.input}
-          placeholder="Nhập lại mật khẩu"
+          placeholder="Xác nhận mật khẩu"
           secureTextEntry
-          value={confirm}
-          onChangeText={setConfirm}
+          value={confirmPassword}
+          onChangeText={setConfirmPassword}
         />
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => {/* Xử lý tiếp tục */}}
-        >
-          <Text style={styles.buttonText}>Tiếp tục</Text>
-        </TouchableOpacity>
       </View>
+
+      <TouchableOpacity
+        style={[styles.button, loading && styles.buttonDisabled]}
+        onPress={handleRegister}
+        disabled={loading}
+      >
+        <Text style={styles.buttonText}>
+          {loading ? 'Đang xử lý...' : 'Hoàn tất'}
+        </Text>
+      </TouchableOpacity>
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', justifyContent: 'center' },
-  topWave: { position: 'absolute', top: 0, left: 0, right: 0 },
-  card: {
-    margin: 24,
+  container: {
+    flex: 1,
+    padding: 20,
     backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
   },
-  title: { fontSize: 20, fontWeight: 'bold', marginBottom: 16, alignSelf: 'center' },
-  input: {
-    borderBottomWidth: 1,
-    borderColor: '#ccc',
-    marginBottom: 24,
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  subtitle: {
     fontSize: 16,
-    paddingVertical: 8,
+    color: '#666',
+    marginBottom: 30,
+    textAlign: 'center',
+  },
+  inputContainer: {
+    marginBottom: 20,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 15,
+    fontSize: 16,
+    marginBottom: 15,
   },
   button: {
-    backgroundColor: '#8AC0C3',
-    borderRadius: 12,
-    paddingVertical: 12,
+    backgroundColor: '#007AFF',
+    padding: 15,
+    borderRadius: 8,
     alignItems: 'center',
   },
-  buttonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-
-  waveImageTop: {
-    width: '100%',
-    height: 500,
+  buttonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
+
+export default PasswordScreen;

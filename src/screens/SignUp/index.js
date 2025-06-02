@@ -15,3 +15,7 @@ export default function SignUpStack() {
     </Stack.Navigator>
   );
 }
+
+export { default as PhoneInputScreen } from './PhoneInputScreen';
+export { default as OtpScreen } from './OtpScreen';
+export { default as PasswordScreen } from './PasswordScreen';
